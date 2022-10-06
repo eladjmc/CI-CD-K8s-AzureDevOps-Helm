@@ -1,0 +1,23 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: weightapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: weightapp
+  template:
+    metadata:
+      labels:
+        app: weightapp
+    spec:
+      containers:
+        - name: weightapp
+          image: eladjmc11/weighttracker
+          imagePullPolicy: "Always"
+          ports:
+          - containerPort: 8080
+          envFrom:
+          - secretRef:
+             name: secret.yml

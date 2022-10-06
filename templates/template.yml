@@ -1,0 +1,41 @@
+         steps:
+          - task: CmdLine@2 # will give some time for the postgress pod to go up and stable
+            displayName: secrets making
+            inputs:
+              script: 'kubectl create secret generic secret.yml --from-literal=COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) --from-literal=HOST=$(HOST) --from-literal=PORT=$(PORT) --from-literal=NODE_ENV=$(NODE_ENV) --from-literal=HOST_URL=$(HOST_URL) --from-literal=OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) --from-literal=OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) --from-literal=OKTA_ORG_URL=$(OKTA_ORG_URL)  --from-literal=PGHOST=$(PGHOST) --from-literal=PGUSERNAME=$(PGUSERNAME) --from-literal=PGDATABASE=$(PGDATABASE) --from-literal=PGPASSWORD=$(PGPASSWORD) --from-literal=POSTGRES_PASSWORD=$(PGPASSWORD)  --from-literal=PGPORT=$(PGPORT) --namespace default'
+
+          - task: KubernetesManifest@0 # will deploy the postgress data base to the cluster
+            displayName: Deploy postgres to Kubernetes cluster
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: $(K8S_CONNECTION)
+              manifests: |
+                $(Pipeline.Workspace)/k8s_yamls/postgres.yaml
+
+          - task: CmdLine@2 # will give some time for the postgress pod to go up and stable
+            displayName: Wait for postgress to go up and stable
+            inputs:
+              script: 'sleep 25'
+
+          - task: KubernetesManifest@0 # will deploy ingress and app service to the cluster
+            displayName: Deploy app service and ingress to cluster
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: $(K8S_CONNECTION)
+              manifests: |
+                $(Pipeline.Workspace)/k8s_yamls/service.yaml
+                $(Pipeline.Workspace)/k8s_yamls/ingress.yaml
+          
+          - task: CmdLine@2 # will give some time time for the services to kick in
+            displayName: Wait for servics to go up and stable
+            inputs:
+              script: 'sleep 5'
+
+          - task: KubernetesManifest@0 # will deploy the weight tracker app to the cluster
+            displayName: Deploy the weight tracker application to the Kubernetes cluster
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: $(K8S_CONNECTION)
+              manifests: |
+                $(Pipeline.Workspace)/k8s_yamls/$(appDeployFileYaml)
+              containers: 'eladjmc11/weighttracker:$(Build.BuildId)'

@@ -1,0 +1,76 @@
+name: Bootcamp-Kubernetes-CICD
+
+trigger:
+- master
+- feature/*
+resources:
+- repo: self
+#####################################################################################################
+#                                                                                                   #
+#                            Continuous Integration Process                                         #
+#                                                                                                   #
+#####################################################################################################
+stages:
+- stage: BuildAndPushImage
+  displayName: Install Docker-Build and push stage
+  jobs:
+  - job: Build
+    displayName: Build and push
+    pool:
+      name: "CI"
+    steps:
+    - task: Docker@2
+      displayName: Build and push image
+      inputs:
+        containerRegistry: 'dockerhub-weight'
+        repository: 'eladjmc11/weighttracker'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+    - upload: k8s_yamls
+      artifact: k8s_yamls
+
+#####################################################################################################
+#                                                                                                   #
+#                       Continuous Deployment Process - to staging                                  #
+#                                                                                                   #
+#####################################################################################################
+- stage: DeployToStaging
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  displayName: Deploy staging stage
+  dependsOn: BuildAndPushImage
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy to staging
+    pool:
+      name: CI
+    environment: 'staging.default'
+    variables:
+      - group: "staging"
+    strategy:
+      runOnce:
+        deploy:
+         steps:
+           - template: templates/template.yml #using template to prevent code replication.
+
+#####################################################################################################
+#                                                                                                   #
+#                       Continuous Deployment Process - to production                               #
+#                                                                                                   #
+#####################################################################################################
+
+- stage: DeployToProduction
+  displayName: Deploy production stage
+  dependsOn: DeployToStaging
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy to production
+    pool:
+      name: CI
+    environment: 'production.default'
+    variables:
+      - group: "production" 
+    strategy:
+      runOnce:
+        deploy:
+         steps:
+           - template: templates/template.yml #using template to prevent code replication.
